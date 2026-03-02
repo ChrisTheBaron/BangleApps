@@ -25,7 +25,6 @@
     if (setting("hide")) return;
     if (w) {
       if (!WIDGETS.weather.width) {
-        WIDGETS.weather.width = 20;
         Bangle.drawWidgets();
       } else if (Bangle.isLCDOn()) {
         WIDGETS.weather.draw();
@@ -71,35 +70,24 @@
     return t;
   }
   function draw(){
-    g.clearRect(this.x, this.y, this.x+this.width-1, this.y+23);
+    if (setting("hide")) return;
     const w = weather.get();
-    if (setting("hide")||!w){
-      WIDGETS.weather.width=0;
-      return;
-    }
-    WIDGETS.weather.width=20;
+    if (!w) return;
     g.reset();
-    if (w.code||w.txt) {
-      if(setting("widgetMonochrome")){
-        buffer.clear();
-        weather.drawIcon(w,7.5,7.5,7.5,buffer,true);
-        var img = buffer.asImage();
-        img.transparent = 0;
-        g.drawImage(img,this.x+10-7.5, this.y+8-7.5)
-      }else{
-        weather.drawIcon(w, this.x+10, this.y+8, 7.5);
-      }
+    g.clearRect(this.x, this.y, this.x+this.width-1, this.y+23);
+    if (w.temp) {
+      let t = require("locale").temp(w.temp-273.15);  // applies conversion
+      t = t.match(/[\d\-]*/)[0]; // but we have no room for units
+      g.reset();
+      g.setFontAlign(0, 0);
+      g.setFont("6x8", 2);
+      g.drawString(t, this.x+this.width/2, this.y+12);
     }
-    let t=getText(setting("widgetData"))
-    g.reset();
-    g.setFontAlign(0, 1); // center horizontally at bottom of widget
-    g.setFont("6x8", 1);
-    g.drawString(t, this.x+10, this.y+24);
   }
   
   WIDGETS.weather = {
     area: "tl",
-    width: weather.get() && !setting("hide") ? 20 : 0,
+    width: weather.get() && !setting("hide") ? 26 : 0,
     draw: draw,
     reload:() => {
       loadSettings();
