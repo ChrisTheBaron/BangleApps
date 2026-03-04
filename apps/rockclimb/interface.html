@@ -1,13 +1,55 @@
-<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Rock Climb</title>
-    <script src="../../core/lib/interface.js"></script>
+    <link rel="stylesheet" href="../../css/spectre.min.css">
 </head>
 <body>
-<h1>
-    Rock Climb
-</h1>
+<div id="data">
+
+</div>
+
+<script src="../../core/lib/interface.js"></script>
+<script>
+
+    const dataEl = document.getElementById('data');
+
+    async function onInit(){
+
+        Util.showModal("Loading...");
+
+        const files = await new Promise(resolve => {
+            Puck.eval(`require("Storage").list(/^rockclimb.*\\.json$/)`, resolve);
+        });
+
+        let html = ``;
+
+        for(let file of files){
+            const json = await new Promise(resolve => Util.readStorageJSON(file, resolve));
+            const date = new Date(parseInt(json.start));
+            console.log(json);
+            html += `<details>
+  <summary>${date.toDateString()} - ${date.toLocaleTimeString()} - Grade ${json.grade}</summary>
+  <p>
+    <dl>
+        <dt>Grade</dt>
+        <dd>${json.grade}</dd>
+        <dt>Incline</dt>
+        <dd>${json.incline}</dd>
+        <dt>Type</dt>
+        <dd>${json.type}</dd>
+    </dl>
+    <a href="#">Download</a>
+  </p>
+</details>`;
+        }
+
+        html += ``;
+
+        dataEl.innerHTML = html;
+
+        Util.hideModal();
+
+    }
+
+</script>
 </body>
 </html>
