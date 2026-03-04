@@ -86,7 +86,7 @@
   }
   
   WIDGETS.weather = {
-    area: "tl",
+    area: "tr",
     width: weather.get() && !setting("hide") ? 26 : 0,
     draw: draw,
     reload:() => {
