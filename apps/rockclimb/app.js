@@ -1,3 +1,5 @@
+const storage = require('Storage');
+
 const appid = "rockclimb";
 
 const grades = [
@@ -37,42 +39,40 @@ function getDateStr(d){
 const today = getDateStr(new Date());
 
 function getTodayCount(){
-    const r = new RegExp("^" + appid + "\." + today + "\..*" + "\.json$");
-    const t = require("Storage").list(r);
+    const r = new RegExp("^" + appid + "\." + today + "\..*" + ".json$");
+    const t = storage.list(r);
     return t.length;
 }
 
 // Recording state
-let recordData = [];
 let recordInterval;
 let hrValue = 0;
 let hrListener;
 let altValue = 0;
 let altListener;
 let startTime;
+let fileName;
 
 function startRecording() {
     recordData = [];
     hrValue = 0;
     altValue = 0;
+    startTime = Date.now();
+    fileName = appid+"."+getDateStr(new Date(startTime))+"."+(getTodayCount()+1);
+    dataFile = storage.open(fileName+".csv", 'a');
 
-    Bangle.setHRMPower(true, appid);
+    Bangle.setHRMPower(1);
     hrListener = hr => { hrValue = hr.bpm; };
-    Bangle.on('HR', hrListener);
+    Bangle.on('HRM', hrListener);
 
-    Bangle.setBarometerPower(true, appid);
+    Bangle.setBarometerPower(1);
     altListener = alt => { altValue = alt.altitude; };
     Bangle.on('pressure', altListener);
 
-    startTime = Date.now();
+    dataFile.write("time,hr,alt\n");
 
     recordInterval = setInterval(() => {
-        const now = Date.now();
-        recordData.push({
-            t: now - startTime,
-            hr: hrValue,
-            alt: altValue
-        });
+        dataFile.write(""+(Date.now() - startTime).toFixed(0)+","+hrValue+","+altValue.toFixed(2)+"\n");
     }, sampleRate);
 
     E.showMenu({
@@ -84,20 +84,17 @@ function startRecording() {
 function stopRecording() {
     if(recordInterval) clearInterval(recordInterval);
 
-    if(hrListener) Bangle.removeListener('HR', hrListener);
-    Bangle.setHRMPower(false, appid);
+    if(hrListener) Bangle.removeListener('HRM', hrListener);
+    Bangle.setHRMPower(0);
 
     if(altListener) Bangle.removeListener('pressure', altListener);
-    Bangle.setBarometerPower(false, appid);
+    Bangle.setBarometerPower(0);
 
-    const filename = appid+"."+getDateStr(new Date(startTime))+"."+(getTodayCount()+1)+".json";
-
-    require("Storage").writeJSON(filename, {
-        start: startTime,
+    storage.writeJSON(fileName + ".json", {
+        start: startTime.toFixed(0),
         type: types[typeIndex],
         incline: inclines[inclineIndex],
-        grade: grades[gradeIndex],
-        data: recordData
+        grade: grades[gradeIndex]
     });
 
     showMainMenu();
