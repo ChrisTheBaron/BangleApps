@@ -43,7 +43,7 @@
   });
 
   WIDGETS.weather = {
-    area: "tl",
+    area: "tr",
     width: 26,
     draw: function() {
       if (setting("hide")) return;
