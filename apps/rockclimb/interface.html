@@ -16,16 +16,18 @@
 
         Util.showModal("Loading...");
 
-        const files = await new Promise(resolve => {
+        const filelist = await new Promise(resolve => {
             Puck.eval(`require("Storage").list(/^rockclimb.*\\.json$/)`, resolve);
         });
 
-        let html = ``;
+        let files = {};
 
-        for(let file of files){
+        let html = `<a id="downloadAll" href="#">Download All</a>&nbsp;|&nbsp;<a id="deleteAll" href="#">Delete All</a>`;
+
+        for(let file of filelist){
             const json = await new Promise(resolve => Util.readStorageJSON(file, resolve));
+            files[file] = json;
             const date = new Date(parseInt(json.start));
-            console.log(json);
             html += `<details>
   <summary>${date.toDateString()} - ${date.toLocaleTimeString()} - Grade ${json.grade}</summary>
   <p>
@@ -37,14 +39,39 @@
         <dt>Type</dt>
         <dd>${json.type}</dd>
     </dl>
-    <a href="#">Download</a>
+    <a href="#" filename="${file}">Download</a>
   </p>
 </details>`;
         }
 
-        html += ``;
-
         dataEl.innerHTML = html;
+
+        async function downloadData(filename){
+            let content = JSON.stringify(files[filename]);
+            content += "\n\n" + await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
+            Util.saveFile(filename.replace('.json', '.dat'), "text/plain", content );
+        }
+
+        document.getElementById('downloadAll').addEventListener('click', async () => {
+            Util.showModal("Downloading...");
+            for(let filename in files){
+                await downloadData(filename);
+            }
+            Util.hideModal();
+        });
+
+        document.getElementById('deleteAll').addEventListener('click', async () => {
+            alert(`Delete all`);
+        });
+
+        document.querySelectorAll("a[filename]").forEach(button => {
+            button.addEventListener("click", async e => {
+                Util.showModal("Downloading...");
+                const filename = e.currentTarget.getAttribute("filename");
+                await downloadData(filename);
+                Util.hideModal();
+            });
+        });
 
         Util.hideModal();
 
