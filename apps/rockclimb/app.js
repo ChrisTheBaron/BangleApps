@@ -32,6 +32,31 @@ let typeIndex = 0;
 let inclineIndex = 0;
 let gradeIndex = 0;
 
+
+function Holt(alpha, beta) {
+    this.a = alpha;   // level smoothing
+    this.b = beta;    // trend smoothing
+    this.l = 0;       // level
+    this.t = 0;       // trend
+    this.init = false;
+}
+
+Holt.prototype.add = function(x) {
+    if (!this.init) {
+        this.l = x;
+        this.t = 0;
+        this.init = true;
+        return x;
+    }
+
+    var prev = this.l;
+    this.l = this.a * x + (1 - this.a) * (this.l + this.t);
+    this.t = this.b * (this.l - prev) + (1 - this.b) * this.t;
+
+    return this.l;
+};
+
+
 function getDateStr(d){
     return d.toISOString().substring(0,10);
 }
@@ -52,11 +77,14 @@ let altValue = 0;
 let altListener;
 let startTime;
 let fileName;
+let altSmoother;
+
 
 function startRecording() {
     recordData = [];
     hrValue = 0;
     altValue = 0;
+    altSmoother = new Holt(0.4, 0.1);
     startTime = Date.now();
     fileName = appid+"."+getDateStr(new Date(startTime))+"."+(getTodayCount()+1);
     dataFile = storage.open(fileName+".csv", 'a');
@@ -66,7 +94,9 @@ function startRecording() {
     Bangle.on('HRM', hrListener);
 
     Bangle.setBarometerPower(1);
-    altListener = alt => { altValue = alt.altitude; };
+    altListener = alt => {
+        altValue = altSmoother.add(alt.altitude);
+    };
     Bangle.on('pressure', altListener);
 
     dataFile.write("time,hr,alt\n");
