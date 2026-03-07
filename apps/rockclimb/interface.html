@@ -10,15 +10,21 @@
 <script src="../../core/lib/interface.js"></script>
 <script>
 
-    const dataEl = document.getElementById('data');
-
     async function onInit(){
 
         Util.showModal("Loading...");
 
+        const dataEl = document.getElementById('data');
+
         const filelist = await new Promise(resolve => {
             Puck.eval(`require("Storage").list(/^rockclimb.*\\.json$/)`, resolve);
         });
+
+        if(filelist.length === 0){
+            dataEl.innerHTML = `<p>No recordings found.</p>`;
+            Util.hideModal();
+            return;
+        }
 
         let files = {};
 
@@ -39,31 +45,79 @@
         <dt>Type</dt>
         <dd>${json.type}</dd>
     </dl>
-    <a href="#" filename="${file}">Download</a>
+    <a href="#" action="download" filename="${file}">Download</a>&nbsp;|&nbsp;<a href="#" action="delete" filename="${file}">Delete</a>
   </p>
 </details>`;
         }
 
         dataEl.innerHTML = html;
 
-        //Adapted from recorder/interface.html
-        async function downloadData(filename) {
+        document.getElementById('downloadAll').addEventListener('click', async () => {
+            Util.showModal("Downloading...");
+            for(let filename in files){
+                await downloadData(filename);
+            }
+            Util.hideModal();
+            await onInit();
+        });
 
-            const metadata = files[filename];
+        document.getElementById('deleteAll').addEventListener('click', async () => {
+            if(!confirm(`Delete all?`)){
+                return;
+            }
+            Util.showModal("Deleting...");
+            for(let filename in files){
+                await deleteData(filename);
+            }
+            Util.hideModal();
+            await onInit();
+        });
 
-            const datafile = await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
+        document.querySelectorAll(`a[action="download"][filename]`).forEach(button => {
+            button.addEventListener("click", async e => {
+                Util.showModal("Downloading...");
+                const filename = e.currentTarget.getAttribute("filename");
+                await downloadData(filename);
+                Util.hideModal();
+                await onInit();
+            });
+        });
 
-            const datapoints = datafile.split('\n');
+        document.querySelectorAll(`a[action="delete"][filename]`).forEach(button => {
+            button.addEventListener("click", async e => {
+                if(!confirm("Delete?")){
+                    return;
+                }
+                Util.showModal("Deleting...");
+                const filename = e.currentTarget.getAttribute("filename");
+                await deleteData(filename);
+                Util.hideModal();
+                await onInit();
+            });
+        });
 
-            //remove header
-            datapoints.shift();
+        Util.hideModal();
 
-            const trkpts = datapoints
-                .filter(dp => dp.length > 0)//ignore empty lines
-                .map(dp => {
-                    const [offset, hr, alt] = dp.split(',').map(parseFloat);
-                    const time = new Date(parseInt(metadata.start) + offset);
-                    return `
+    }
+
+    //Adapted from recorder/interface.html
+    async function downloadData(filename) {
+
+        const metadata = files[filename];
+
+        const datafile = await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
+
+        const datapoints = datafile.split('\n');
+
+        //remove header
+        datapoints.shift();
+
+        const trkpts = datapoints
+            .filter(dp => dp.length > 0)//ignore empty lines
+            .map(dp => {
+                const [offset, hr, alt] = dp.split(',').map(parseFloat);
+                const time = new Date(parseInt(metadata.start) + offset);
+                return `
         <trkpt lat="0" lon="0">
           <ele>${alt}</ele>
           <time>${time.toISOString()}</time>
@@ -71,9 +125,9 @@
             ${hr > 0 ? `<gpxtpx:hr>${hr}</gpxtpx:hr>` : ``}
           </gpxtpx:TrackPointExtension></extensions>
         </trkpt>`;
-                });
+            });
 
-            const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+        const gpx = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx creator="Bangle.js" version="1.1" xmlns="http://www.topografix.com/GPX/1/1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.garmin.com/xmlschemas/GpxExtensions/v3 http://www.garmin.com/xmlschemas/GpxExtensionsv3.xsd http://www.garmin.com/xmlschemas/TrackPointExtension/v1 http://www.garmin.com/xmlschemas/TrackPointExtensionv1.xsd" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3">
   <metadata><time>${new Date(parseInt(metadata.start)).toISOString()}</time></metadata>
   <metadata>
@@ -89,32 +143,13 @@
   </trk>
 </gpx>`;
 
-            Util.saveFile(filename.replace('.json', '.gpx'), "gpx+xml", gpx);
-        }
+        Util.saveFile(filename.replace('.json', '.gpx'), "gpx+xml", gpx);
 
-        document.getElementById('downloadAll').addEventListener('click', async () => {
-            Util.showModal("Downloading...");
-            for(let filename in files){
-                await downloadData(filename);
-            }
-            Util.hideModal();
-        });
+    }
 
-        document.getElementById('deleteAll').addEventListener('click', async () => {
-            alert(`Delete all`);
-        });
-
-        document.querySelectorAll("a[filename]").forEach(button => {
-            button.addEventListener("click", async e => {
-                Util.showModal("Downloading...");
-                const filename = e.currentTarget.getAttribute("filename");
-                await downloadData(filename);
-                Util.hideModal();
-            });
-        });
-
-        Util.hideModal();
-
+    async function deleteData(filename){
+        await new Promise(resolve => Util.eraseStorage(filename, resolve));
+        await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
     }
 
 </script>
