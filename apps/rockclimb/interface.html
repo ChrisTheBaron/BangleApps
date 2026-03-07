@@ -46,10 +46,50 @@
 
         dataEl.innerHTML = html;
 
-        async function downloadData(filename){
-            let content = JSON.stringify(files[filename]);
-            content += "\n\n" + await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
-            Util.saveFile(filename.replace('.json', '.dat'), "text/plain", content );
+        //Adapted from recorder/interface.html
+        async function downloadData(filename) {
+
+            const metadata = files[filename];
+
+            const datafile = await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
+
+            const datapoints = datafile.split('\n');
+
+            //remove header
+            datapoints.shift();
+
+            const trkpts = datapoints
+                .filter(dp => dp.length > 0)//ignore empty lines
+                .map(dp => {
+                    const [offset, hr, alt] = dp.split(',').map(parseFloat);
+                    const time = new Date(parseInt(metadata.start) + offset);
+                    return `
+        <trkpt lat="0" lon="0">
+          <ele>${alt}</ele>
+          <time>${time.toISOString()}</time>
+          <extensions><gpxtpx:TrackPointExtension>
+            ${hr > 0 ? `<gpxtpx:hr>${hr}</gpxtpx:hr>` : ``}
+          </gpxtpx:TrackPointExtension></extensions>
+        </trkpt>`;
+                });
+
+            const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx creator="Bangle.js" version="1.1" xmlns="http://www.topografix.com/GPX/1/1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.garmin.com/xmlschemas/GpxExtensions/v3 http://www.garmin.com/xmlschemas/GpxExtensionsv3.xsd http://www.garmin.com/xmlschemas/TrackPointExtension/v1 http://www.garmin.com/xmlschemas/TrackPointExtensionv1.xsd" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3">
+  <metadata><time>${new Date(parseInt(metadata.start)).toISOString()}</time></metadata>
+  <metadata>
+    <author>
+      <name>Bangle.js</name>
+      <link href="https://banglejs.com/apps/?id=rockclimb" />
+    </author>
+  </metadata>
+  <trk>
+    <name>${filename.replace('.json', '')}</name>
+    <trkseg>${trkpts.join('')}
+    </trkseg>
+  </trk>
+</gpx>`;
+
+            Util.saveFile(filename.replace('.json', '.gpx'), "gpx+xml", gpx);
         }
 
         document.getElementById('downloadAll').addEventListener('click', async () => {
