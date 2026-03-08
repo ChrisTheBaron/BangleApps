@@ -98,36 +98,34 @@
 
         Util.hideModal();
 
-    }
+        //Adapted from recorder/interface.html
+        async function downloadData(filename) {
 
-    //Adapted from recorder/interface.html
-    async function downloadData(filename) {
+            const metadata = files[filename];
 
-        const metadata = files[filename];
+            const datafile = await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
 
-        const datafile = await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
+            console.log(datafile);
 
-        const datapoints = datafile.split('\n');
+            const datapoints = datafile.split('\n');
 
-        //remove header
-        datapoints.shift();
+            //remove header and footer
+            datapoints.shift();
+            datapoints.pop();
 
-        const trkpts = datapoints
-            .filter(dp => dp.length > 0)//ignore empty lines
-            .map(dp => {
+            const trkpts = datapoints.map(dp => {
+                console.log(dp);
                 const [offset, hr, alt] = dp.split(',').map(parseFloat);
                 const time = new Date(parseInt(metadata.start) + offset);
                 return `
         <trkpt lat="0" lon="0">
           <ele>${alt}</ele>
           <time>${time.toISOString()}</time>
-          <extensions><gpxtpx:TrackPointExtension>
-            ${hr > 0 ? `<gpxtpx:hr>${hr}</gpxtpx:hr>` : ``}
-          </gpxtpx:TrackPointExtension></extensions>
+          ${hr > 0 ? `<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${hr}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>` : ``}
         </trkpt>`;
-            });
+                });
 
-        const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+            const gpx = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx creator="Bangle.js" version="1.1" xmlns="http://www.topografix.com/GPX/1/1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.garmin.com/xmlschemas/GpxExtensions/v3 http://www.garmin.com/xmlschemas/GpxExtensionsv3.xsd http://www.garmin.com/xmlschemas/TrackPointExtension/v1 http://www.garmin.com/xmlschemas/TrackPointExtensionv1.xsd" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3">
   <metadata><time>${new Date(parseInt(metadata.start)).toISOString()}</time></metadata>
   <metadata>
@@ -135,6 +133,13 @@
       <name>Bangle.js</name>
       <link href="https://banglejs.com/apps/?id=rockclimb" />
     </author>
+    <extensions>
+      <climb:route>
+        <climb:incline>${metadata.incline}</climb:incline>
+        <climb:grade>${metadata.grade}</climb:grade>
+        <climb:type>${metadata.type}</climb:type>
+      </climb:route>
+    </extensions>
   </metadata>
   <trk>
     <name>${filename.replace('.json', '')}</name>
@@ -143,13 +148,15 @@
   </trk>
 </gpx>`;
 
-        Util.saveFile(filename.replace('.json', '.gpx'), "gpx+xml", gpx);
+            Util.saveFile(filename.replace('.json', '.gpx'), "gpx+xml", gpx);
 
-    }
+        }
 
-    async function deleteData(filename){
-        await new Promise(resolve => Util.eraseStorage(filename, resolve));
-        await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
+        async function deleteData(filename){
+            await new Promise(resolve => Util.eraseStorage(filename, resolve));
+            await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
+        }
+
     }
 
 </script>
