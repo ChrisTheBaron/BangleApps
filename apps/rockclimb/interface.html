@@ -105,8 +105,6 @@
 
             const datafile = await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
 
-            console.log(datafile);
-
             const datapoints = datafile.split('\n');
 
             //remove header and footer
@@ -114,7 +112,6 @@
             datapoints.pop();
 
             const trkpts = datapoints.map(dp => {
-                console.log(dp);
                 const [offset, hr, alt] = dp.split(',').map(parseFloat);
                 const time = new Date(parseInt(metadata.start) + offset);
                 return `
