@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+        xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        targetNamespace="https://christhebaron.co.uk/BangleApps/apps/rockclimb/rockclimb.xsd"
+        xmlns:climb="https://christhebaron.co.uk/BangleApps/apps/rockclimb/rockclimb.xsd"
+        elementFormDefault="qualified"
+        attributeFormDefault="unqualified">
+
+    <!-- Route extension -->
+    <xs:element name="route" type="climb:RouteType"/>
+
+    <xs:complexType name="RouteType">
+        <xs:sequence>
+            <xs:element name="tag" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+
+        <xs:attribute name="incline" type="climb:InclineType" use="required"/>
+        <xs:attribute name="grade" type="climb:GradeType" use="required"/>
+    </xs:complexType>
+
+    <!-- Wall incline -->
+    <xs:simpleType name="InclineType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="Slab"/>
+            <xs:enumeration value="Vertical"/>
+            <xs:enumeration value="Overhang"/>
+            <xs:enumeration value="Roof"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <!-- Grade format -->
+    <xs:simpleType name="GradeType">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[0-9]+[abc]?\+?"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+</xs:schema>
