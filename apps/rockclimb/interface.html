@@ -124,24 +124,25 @@
 
             const gpx = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx creator="Bangle.js" version="1.1" xmlns="http://www.topografix.com/GPX/1/1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.garmin.com/xmlschemas/GpxExtensions/v3 http://www.garmin.com/xmlschemas/GpxExtensionsv3.xsd http://www.garmin.com/xmlschemas/TrackPointExtension/v1 http://www.garmin.com/xmlschemas/TrackPointExtensionv1.xsd" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3">
-  <metadata><time>${new Date(parseInt(metadata.start)).toISOString()}</time></metadata>
   <metadata>
     <author>
       <name>Bangle.js</name>
       <link href="https://banglejs.com/apps/?id=rockclimb" />
     </author>
-    <extensions>
-      <climb:route>
-        <climb:incline>${metadata.incline}</climb:incline>
-        <climb:grade>${metadata.grade}</climb:grade>
-        <climb:type>${metadata.type}</climb:type>
-      </climb:route>
-    </extensions>
   </metadata>
   <trk>
+    <metadata>
+        <time>${new Date(parseInt(metadata.start)).toISOString()}</time>
+        <extensions>
+          <climb:route>
+          <climb:incline>${metadata.incline}</climb:incline>
+          <climb:grade>${metadata.grade}</climb:grade>
+          <climb:type>${metadata.type}</climb:type>
+        </climb:route>
+      </extensions>
+    </metadata>
     <name>${filename.replace('.json', '')}</name>
-    <trkseg>${trkpts.join('')}
-    </trkseg>
+    <trkseg>${trkpts.join('')}</trkseg>
   </trk>
 </gpx>`;
 
