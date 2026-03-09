@@ -58,7 +58,6 @@
                 await downloadData(filename);
             }
             Util.hideModal();
-            await onInit();
         });
 
         document.getElementById('deleteAll').addEventListener('click', async () => {
@@ -79,7 +78,6 @@
                 const filename = e.currentTarget.getAttribute("filename");
                 await downloadData(filename);
                 Util.hideModal();
-                await onInit();
             });
         });
 
@@ -134,11 +132,9 @@
     <metadata>
         <time>${new Date(parseInt(metadata.start)).toISOString()}</time>
         <extensions>
-          <climb:route>
-          <climb:incline>${metadata.incline}</climb:incline>
-          <climb:grade>${metadata.grade}</climb:grade>
-          <climb:type>${metadata.type}</climb:type>
-        </climb:route>
+          <climb:route incline="${metadata.incline}" grade="${metadata.grade}">
+            ${metadata.type !== 'Normal' ? `<climb:tag>${metadata.type}</climb:tag>`: ''}
+          </climb:route>
       </extensions>
     </metadata>
     <name>${filename.replace('.json', '')}</name>
