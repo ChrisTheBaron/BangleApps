@@ -21,9 +21,7 @@ const inclines = [
 const types = [
     'Normal',
     'One Handed',
-    'Twister',
-    'Climbdown',
-    'Weighted'
+    'Twister'
 ];
 
 const sampleRate = 1000;//TODO: Setting
@@ -31,6 +29,9 @@ const sampleRate = 1000;//TODO: Setting
 let typeIndex = 0;
 let inclineIndex = 0;
 let gradeIndex = 0;
+let autoBelay = false;
+let climbDown = false;
+let weighted = false;
 
 function getDateStr(d){
     return d.toISOString().substring(0,10);
@@ -75,8 +76,8 @@ function startRecording() {
 
     E.showMenu({
         "": { title:"Recording (" + count + ")"},
-        "Another": ()=> stopRecording("another"),
         "Topped": () => stopRecording("topped"),
+        "Another": ()=> stopRecording("another"),
         "Nearly": () => stopRecording("nearly"),
         "Cancel": () => stopRecording("cancel"),
     });
@@ -98,7 +99,10 @@ function stopRecording(state) {
             completed: (state === "topped" || state === "another"),
             type: types[typeIndex],
             incline: inclines[inclineIndex],
-            grade: grades[gradeIndex]
+            grade: grades[gradeIndex],
+            autoBelay,
+            weighted,
+            climbDown
         });
     } else {
         const dataFile = storage.open(fileName+".csv", 'r');
@@ -143,6 +147,18 @@ function showMainMenu() {
             wrap: true,
             format: v => types[v],
             onchange: v => typeIndex = v
+        },
+        "Auto Belay": {
+            value: autoBelay,
+            onchange: v => autoBelay = v
+        },
+        "Climb Down": {
+            value: climbDown,
+            onchange: v => climbDown = v
+        },
+        "Weighted": {
+            value: weighted,
+            onchange: v => weighted = v
         },
     });
 }
