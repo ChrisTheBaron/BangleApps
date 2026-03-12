@@ -3,9 +3,7 @@
     <link rel="stylesheet" href="../../css/spectre.min.css">
 </head>
 <body>
-<div id="data">
-
-</div>
+<div id="data"></div>
 
 <script src="../../core/lib/interface.js"></script>
 <script>
@@ -16,60 +14,65 @@
 
         const dataEl = document.getElementById('data');
 
-        const filelist = await new Promise(resolve => {
+        const allfiles = await new Promise(resolve => {
             Puck.eval(`require("Storage").list(/^rockclimb.*\\.json$/)`, resolve);
         });
 
-        if(filelist.length === 0){
+        if(allfiles.length === 0){
             dataEl.innerHTML = `<p>No recordings found.</p>`;
             Util.hideModal();
             return;
         }
 
         let files = {};
+        let html = ``;
 
-        let html = `<a id="downloadAll" href="#">Download All</a>&nbsp;|&nbsp;<a id="deleteAll" href="#">Delete All</a>`;
+        const sessions = Object.groupBy(allfiles, f => f.substring(10, 20));
 
-        for(let file of filelist){
-            const json = await new Promise(resolve => Util.readStorageJSON(file, resolve));
-            files[file] = json;
-            const date = new Date(parseInt(json.start));
-            html += `<details>
-  <summary>${date.toDateString()} - ${date.toLocaleTimeString()} - Grade ${json.grade}</summary>
-  <p>
-    <dl>
-        <dt>Grade</dt>
-        <dd>${json.grade}</dd>
-        <dt>Incline</dt>
-        <dd>${json.incline}</dd>
-        <dt>Type</dt>
-        <dd>${json.type}</dd>
-    </dl>
-    <a href="#" action="download" filename="${file}">Download</a>&nbsp;|&nbsp;<a href="#" action="delete" filename="${file}">Delete</a>
-  </p>
+        for(let session in sessions){
+
+            const sessionfiles = sessions[session];
+            const sessionDate = new Date(session);
+
+            html += `<details><summary>${sessionDate.toDateString()}</summary>`;
+
+            html += `<div>`;
+
+            html += `<a href="#" action="downloadSession" session="${session}">Download Session</a>&nbsp;|&nbsp;<a href="#" action="deleteSession" session="${session}">Delete Session</a>`;
+
+            for(let file of sessionfiles){
+                const json = await new Promise(resolve => Util.readStorageJSON(file, resolve));
+                files[file] = json;
+                const date = new Date(parseInt(json.start));
+                html += `<details>
+  <summary>${date.toLocaleTimeString()} - ${json.grade} ${json.incline} ${json.type}</summary>
+  <a href="#" action="download" filename="${file}">Download Climb</a>&nbsp;|&nbsp;<a href="#" action="delete" filename="${file}">Delete Climb</a>
 </details>`;
+            }
+
+            html += `</div></details>`;
         }
 
         dataEl.innerHTML = html;
 
-        document.getElementById('downloadAll').addEventListener('click', async () => {
-            Util.showModal("Downloading...");
-            for(let filename in files){
-                await downloadData(filename);
-            }
-            Util.hideModal();
+        document.querySelectorAll(`a[action="downloadSession"]`).forEach(button => {
+            button.addEventListener("click", async e => {
+                const session = e.currentTarget.getAttribute("session");
+                Util.showModal("Downloading...");
+                await downloadSession(session, sessions[session]);
+                Util.hideModal();
+            });
         });
 
-        document.getElementById('deleteAll').addEventListener('click', async () => {
-            if(!confirm(`Delete all?`)){
-                return;
-            }
-            Util.showModal("Deleting...");
-            for(let filename in files){
-                await deleteData(filename);
-            }
-            Util.hideModal();
-            await onInit();
+        document.querySelectorAll(`a[action="deleteSession"]`).forEach(button => {
+            button.addEventListener("click", async e => {
+                if(!confirm("Delete all recordings for this session?")) return;
+                const session = e.currentTarget.getAttribute("session");
+                Util.showModal("Deleting...");
+                for(let filename of sessions[session]) await deleteData(filename);
+                Util.hideModal();
+                await onInit();
+            });
         });
 
         document.querySelectorAll(`a[action="download"][filename]`).forEach(button => {
@@ -83,9 +86,7 @@
 
         document.querySelectorAll(`a[action="delete"][filename]`).forEach(button => {
             button.addEventListener("click", async e => {
-                if(!confirm("Delete?")){
-                    return;
-                }
+                if(!confirm("Delete?")) return;
                 Util.showModal("Deleting...");
                 const filename = e.currentTarget.getAttribute("filename");
                 await deleteData(filename);
@@ -96,31 +97,57 @@
 
         Util.hideModal();
 
-        //Adapted from recorder/interface.html
-        async function downloadData(filename) {
-
-            const metadata = files[filename];
-
-            const datafile = await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
-
+        /**
+         * @param {String} datafile
+         * @param {Number} startTime
+         * @returns {String[]}
+         */
+        function buildTrkpts(datafile, startTime) {
             const datapoints = datafile.split('\n');
+            datapoints.shift(); // header
+            datapoints.pop();   // trailing newline
+            return datapoints.map(dp => {
+                const [offset, type, value] = dp.split(',');
+                const time = new Date(parseInt(startTime) + parseInt(offset));
+                return `<trkpt lat="0" lon="0">
+                    <time>${time.toISOString()}</time>
+                    ${type === 'a' ? `<ele>${parseFloat(value)}</ele>` : ''}
+                    ${type === 'h' ? `<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${parseFloat(value)}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>` : ''}
+                </trkpt>`;
+            });
+        }
 
-            //remove header and footer
-            datapoints.shift();
-            datapoints.pop();
+        /**
+         * @param {String} filename
+         * @param {String} metadata
+         * @param {String[]} trkpts
+         * @returns {string}
+         */
+        function buildTrk(filename, metadata, trkpts) {
+            return `
+<trk>
+  <metadata>
+    <time>${new Date(parseInt(metadata.start)).toISOString()}</time>
+    <extensions>
+      <climb:route incline="${metadata.incline}" grade="${metadata.grade}" completed="${metadata.completed ?? true}">
+        ${metadata.type !== 'Normal' ? `<climb:tag>${metadata.type}</climb:tag>` : ''}
+        ${metadata.weighted      ? `<climb:tag>Weighted</climb:tag>`    : ''}
+        ${metadata.autoBelay     ? `<climb:tag>Auto Belay</climb:tag>`  : ''}
+        ${metadata.climbDown     ? `<climb:tag>Climb Down</climb:tag>`  : ''}
+      </climb:route>
+    </extensions>
+  </metadata>
+  <name>${filename.replace('.json', '')}</name>
+  <trkseg>${trkpts.join('')}</trkseg>
+</trk>`;
+        }
 
-            const trkpts = datapoints.map(dp => {
-                const [offset, hr, alt] = dp.split(',').map(parseFloat);
-                const time = new Date(parseInt(metadata.start) + offset);
-                return `
-        <trkpt lat="0" lon="0">
-          <ele>${alt}</ele>
-          <time>${time.toISOString()}</time>
-          ${hr > 0 ? `<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${hr}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>` : ``}
-        </trkpt>`;
-                });
-
-            const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+        /**
+         * @param {String[]} tracks
+         * @returns {string}
+         */
+        function wrapGpx(tracks) {
+            return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx creator="Bangle.js" version="1.1"
 xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.garmin.com/xmlschemas/GpxExtensions/v3 http://www.garmin.com/xmlschemas/GpxExtensionsv3.xsd http://www.garmin.com/xmlschemas/TrackPointExtension/v1 http://www.garmin.com/xmlschemas/TrackPointExtensionv1.xsd"
 xmlns="http://www.topografix.com/GPX/1/1/"
@@ -128,33 +155,60 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1"
 xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3"
 xmlns:climb="https://christhebaron.co.uk/BangleApps/apps/rockclimb/rockclimb.xsd">
-  <metadata>
-    <author>
-      <name>Bangle.js</name>
-      <link href="https://banglejs.com/apps/?id=rockclimb" />
-    </author>
-  </metadata>
-  <trk>
-    <metadata>
-        <time>${new Date(parseInt(metadata.start)).toISOString()}</time>
-        <extensions>
-          <climb:route incline="${metadata.incline}" grade="${metadata.grade}">
-            ${metadata.type !== 'Normal' ? `<climb:tag>${metadata.type}</climb:tag>`: ''}
-          </climb:route>
-      </extensions>
-    </metadata>
-    <name>${filename.replace('.json', '')}</name>
-    <trkseg>${trkpts.join('')}</trkseg>
-  </trk>
+<metadata>
+  <author>
+    <name>Bangle.js</name>
+    <link href="https://banglejs.com/apps/?id=rockclimb" />
+  </author>
+</metadata>
+${tracks.join('\n')}
 </gpx>`;
-
-            Util.saveFile(filename.replace('.json', '.gpx'), "gpx+xml", gpx);
-
         }
 
-        async function deleteData(filename){
+        /**
+         * @param {String} filename
+         * @returns {Promise<string|null>}
+         */
+        async function buildTrkFromFile(filename) {
+            const metadata = files[filename];
+            const datafile = await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
+            if(!datafile) return null;
+            const trkpts = buildTrkpts(datafile, metadata.start);
+            return buildTrk(filename, metadata, trkpts);
+        }
+
+        /**
+         * @param {String} session
+         * @param {String[]} sessionfiles
+         * @returns {Promise<void>}
+         */
+        async function downloadSession(session, sessionfiles) {
+            const tracks = [];
+            for(const filename of sessionfiles) {
+                const trk = await buildTrkFromFile(filename);
+                if(!trk) continue;
+                tracks.push(trk);
+            }
+            Util.saveFile(`rockclimb-${session}.gpx`, "gpx+xml", wrapGpx(tracks));
+        }
+
+        /**
+         * @param {String} filename
+         * @returns {Promise<void>}
+         */
+        async function downloadData(filename) {
+            const trk = await buildTrkFromFile(filename);
+            if(!trk) return;
+            Util.saveFile(filename.replace('.json', '.gpx'), "gpx+xml", wrapGpx([trk]));
+        }
+
+        /**
+         * @param {String} filename
+         * @returns {Promise<void>}
+         */
+        async function deleteData(filename) {
             await new Promise(resolve => Util.eraseStorage(filename, resolve));
-            await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
+            await new Promise(resolve => Util.eraseStorageFile(filename.replace('.json', '.csv'), resolve));
         }
 
     }
