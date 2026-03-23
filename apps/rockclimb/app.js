@@ -56,6 +56,9 @@ let startTime;
 let fileName;
 
 function startRecording() {
+
+    Bangle.buzz();
+    
     const count = getTodayCount()+1;
     startTime = Date.now();
     fileName = appid+"."+getDateStr(new Date(startTime))+"."+count;
@@ -85,6 +88,8 @@ function startRecording() {
 }
 
 function stopRecording(state) {
+
+    Bangle.buzz();
 
     if(hrListener) Bangle.removeListener('HRM', hrListener);
     Bangle.setHRMPower(false, appid);
