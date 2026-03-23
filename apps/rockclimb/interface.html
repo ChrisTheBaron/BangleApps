@@ -189,7 +189,7 @@ ${tracks.join('\n')}
                 if(!trk) continue;
                 tracks.push(trk);
             }
-            Util.saveFile(`rockclimb-${session}.gpx`, "gpx+xml", wrapGpx(tracks));
+            Util.saveFile(`rockclimb.${session}.gpx`, "gpx/xml", wrapGpx(tracks));
         }
 
         /**
@@ -199,7 +199,7 @@ ${tracks.join('\n')}
         async function downloadData(filename) {
             const trk = await buildTrkFromFile(filename);
             if(!trk) return;
-            Util.saveFile(filename.replace('.json', '.gpx'), "gpx+xml", wrapGpx([trk]));
+            Util.saveFile(filename.replace('.json', '.gpx'), "gpx/xml", wrapGpx([trk]));
         }
 
         /**
