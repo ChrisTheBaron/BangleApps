@@ -69,7 +69,11 @@
                 if(!confirm("Delete all recordings for this session?")) return;
                 const session = e.currentTarget.getAttribute("session");
                 Util.showModal("Deleting...");
-                for(let filename of sessions[session]) await deleteData(filename);
+                let count = 0;
+                for(let filename of sessions[session]){
+                    Util.showModal(`Deleting (${count++}/${Object.keys(sessions).length})...`);
+                    await deleteData(filename);
+                }
                 Util.hideModal();
                 await onInit();
             });
@@ -185,6 +189,7 @@ ${tracks.join('\n')}
         async function downloadSession(session, sessionfiles) {
             const tracks = [];
             for(const filename of sessionfiles) {
+                Util.showModal(`Downloading (${tracks.length}/${sessionfiles.length})...`);
                 const trk = await buildTrkFromFile(filename);
                 if(!trk) continue;
                 tracks.push(trk);
