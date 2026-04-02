@@ -5,6 +5,7 @@
 <body>
 <div id="data"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="../../core/lib/interface.js"></script>
 <script>
 
@@ -44,9 +45,10 @@
                 const json = await new Promise(resolve => Util.readStorageJSON(file, resolve));
                 files[file] = json;
                 const date = new Date(parseInt(json.start));
-                html += `<details>
+                html += `<details filename="${file}">
   <summary>${date.toLocaleTimeString()} - ${json.grade} ${json.incline} ${json.type}</summary>
   <a href="#" action="download" filename="${file}">Download Climb</a>&nbsp;|&nbsp;<a href="#" action="delete" filename="${file}">Delete Climb</a>
+  <canvas id="chart-${file}">Loading...</canvas>
 </details>`;
             }
 
@@ -54,6 +56,69 @@
         }
 
         dataEl.innerHTML = html;
+
+        document.querySelectorAll(`details[filename]`).forEach(detail =>{
+            detail.addEventListener('toggle', async () => {
+                const filename = detail.getAttribute('filename');
+                const datafile = await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
+                const elevation = parseElevation(datafile);
+
+                const first = lowPass(5);
+                const second = lowPass(5);
+                const third = lowPass(10);
+
+                const start = elevation[0].x;
+                const end = elevation[elevation.length-1].x;
+
+                const forward = elevation.map(e => ({ x : e.x, y : first(e.x, e.y) }));
+                const backward = elevation.reverse().map(e => ({ x : e.x, y : second(end - e.x, e.y) })).reverse();
+
+                const averaged = [];
+
+                for(let i in forward) {
+                    const f = i/forward.length;
+                    const b = 1 - f;
+                    averaged.push({x: forward[i].x, y: third(forward[i].x, forward[i].y * f + backward[i].y * b)});
+                }
+
+                const maxValue = Math.max(...averaged.map(x => x.y));
+                const minValue = Math.min(...averaged.map(x => x.y));
+
+                const maxIndex = averaged.findIndex(x => x.y > maxValue - (maxValue - minValue) * 0.01);
+                const minIndex = averaged.findLastIndex(x => x.y < minValue + (maxValue - minValue) * 0.01);
+
+                const ctx = document.getElementById(`chart-${filename}`);
+                const data = {
+                    datasets: [
+                        {
+                            label: 'Filtered',
+                            data: averaged,
+                            backgroundColor: 'green'
+                        },
+                    ]
+                };
+                const config = {
+                    type: 'scatter',
+                    data: data,
+                    options: {
+                        animation: false,
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                position: 'bottom',
+                                min: averaged[minIndex].x,
+                                max: averaged[maxIndex].x
+                            },
+                            y: {
+                                min: minValue,
+                                max: maxValue
+                            }
+                        }
+                    }
+                };
+                new Chart(ctx, config);
+            }, { once: true });
+        });
 
         document.querySelectorAll(`a[action="downloadSession"]`).forEach(button => {
             button.addEventListener("click", async e => {
@@ -101,6 +166,31 @@
 
         Util.hideModal();
 
+        function lowPass(tau) {
+            let prev = null;
+            let prevTime = null;
+
+            return (timestamp, value) => {
+                if (prev === null) {
+                    prev = value;
+                    prevTime = timestamp;
+                    return value;
+                }
+
+                const dt = (timestamp - prevTime) / 1000; // ms → seconds
+
+                // avoid issues with duplicate timestamps
+                if (dt <= 0) return prev;
+
+                const alpha = 1 - Math.exp(-dt / tau);
+
+                prev = prev + alpha * (value - prev);
+                prevTime = timestamp;
+
+                return prev;
+            };
+        }
+
         /**
          * @param {String} datafile
          * @param {Number} startTime
@@ -119,6 +209,21 @@
                     ${type === 'h' ? `<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${parseFloat(value)}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>` : ''}
                 </trkpt>`;
             });
+        }
+
+        function parseElevation(datafile) {
+            let elevation = [];
+            const datapoints = datafile.split('\n');
+            datapoints.shift(); // header
+            datapoints.pop();   // trailing newline
+            datapoints.map(dp => {
+                const [offset, type, value] = dp.split(',');
+                if(type !== 'a'){
+                    return;
+                }
+                elevation.push({ x: parseInt(offset), y: parseFloat(value) });
+            });
+            return elevation;
         }
 
         /**
