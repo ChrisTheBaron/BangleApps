@@ -1,0 +1,341 @@
+
+async function onInit(){
+
+    Util.showModal("Loading...");
+
+    const dataEl = document.getElementById('data');
+
+    const allfiles = await new Promise(resolve => {
+        Puck.eval(`require("Storage").list(/^rockclimb.*\\.json$/)`, resolve);
+    });
+
+    if(allfiles.length === 0){
+        dataEl.innerHTML = `<p>No recordings found.</p>`;
+        Util.hideModal();
+        return;
+    }
+
+    let files = {};
+    let html = ``;
+
+    const sessions = Object.groupBy(allfiles, f => f.substring(10, 20));
+
+    for(let session in sessions){
+
+        const sessionfiles = sessions[session];
+        const sessionDate = new Date(session);
+
+        html += `<details><summary>${sessionDate.toDateString()}</summary>`;
+
+        html += `<div>`;
+
+        html += `<a href="#" action="downloadSession" session="${session}">Download Session</a>&nbsp;|&nbsp;<a href="#" action="deleteSession" session="${session}">Delete Session</a>`;
+
+        for(let file of sessionfiles){
+            const json = await new Promise(resolve => Util.readStorageJSON(file, resolve));
+            files[file] = json;
+            const date = new Date(parseInt(json.start));
+            html += `<details filename="${file}">
+  <summary>${date.toLocaleTimeString()} - ${json.grade} ${json.incline} ${json.type}</summary>
+  <a href="#" action="download" filename="${file}">Download Climb</a>&nbsp;|&nbsp;<a href="#" action="delete" filename="${file}">Delete Climb</a>
+  <canvas id="chart-${file}">Loading...</canvas>
+</details>`;
+        }
+
+        html += `</div></details>`;
+    }
+
+    dataEl.innerHTML = html;
+
+    document.querySelectorAll(`details[filename]`).forEach(detail => {
+        detail.addEventListener('toggle', async () => {
+            const filename = detail.getAttribute('filename');
+            const datafile = await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
+            const { elevation, averaged, minIndex, maxIndex, maxValue, minValue, diff } = parseElevation(datafile);
+
+            const ctx = document.getElementById(`chart-${filename}`);
+            const data = {
+                datasets: [
+                    {
+                        label: 'Filtered',
+                        data: averaged,
+                        backgroundColor: 'green'
+                    },
+                    //{
+                    //    label: 'Start',
+                    //    data: [
+                    //        {x: averaged[minIndex].x, y: minValue},
+                    //        {x: averaged[minIndex].x, y: maxValue}
+                    //    ],
+                    //    type: 'line',
+                    //},
+                    //{
+                    //    label: 'End',
+                    //    data: [
+                    //        {x: averaged[maxIndex].x, y: minValue},
+                    //        {x: averaged[maxIndex].x, y: maxValue}
+                    //    ],
+                    //    type: 'line',
+                    //},
+                ]
+            };
+            const config = {
+                type: 'scatter',
+                data: data,
+                options: {
+                    animation: false,
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            min: averaged[minIndex].x,
+                            max: averaged[maxIndex].x
+                        },
+                        y: {
+                            min: minValue - diff * 10,
+                            max: maxValue + diff * 10
+                        }
+                    }
+                }
+            };
+            new Chart(ctx, config);
+        }, { once: true });
+    });
+
+    document.querySelectorAll(`a[action="downloadSession"]`).forEach(button => {
+        button.addEventListener("click", async e => {
+            const session = e.currentTarget.getAttribute("session");
+            Util.showModal("Downloading...");
+            await downloadSession(session, sessions[session]);
+            Util.hideModal();
+        });
+    });
+
+    document.querySelectorAll(`a[action="deleteSession"]`).forEach(button => {
+        button.addEventListener("click", async e => {
+            if(!confirm("Delete all recordings for this session?")) return;
+            const session = e.currentTarget.getAttribute("session");
+            Util.showModal("Deleting...");
+            let count = 0;
+            for(let filename of sessions[session]){
+                Util.showModal(`Deleting (${count++}/${Object.keys(sessions).length})...`);
+                await deleteData(filename);
+            }
+            Util.hideModal();
+            await onInit();
+        });
+    });
+
+    document.querySelectorAll(`a[action="download"][filename]`).forEach(button => {
+        button.addEventListener("click", async e => {
+            Util.showModal("Downloading...");
+            const filename = e.currentTarget.getAttribute("filename");
+            await downloadData(filename);
+            Util.hideModal();
+        });
+    });
+
+    document.querySelectorAll(`a[action="delete"][filename]`).forEach(button => {
+        button.addEventListener("click", async e => {
+            if(!confirm("Delete?")) return;
+            Util.showModal("Deleting...");
+            const filename = e.currentTarget.getAttribute("filename");
+            await deleteData(filename);
+            Util.hideModal();
+            await onInit();
+        });
+    });
+
+    Util.hideModal();
+
+    function lowPass(tau) {
+        let prev = null;
+        let prevTime = null;
+
+        return (timestamp, value) => {
+            if (prev === null) {
+                prev = value;
+                prevTime = timestamp;
+                return value;
+            }
+
+            const dt = (timestamp - prevTime) / 1000; // ms → seconds
+
+            // avoid issues with duplicate timestamps
+            if (dt <= 0) return prev;
+
+            const alpha = 1 - Math.exp(-dt / tau);
+
+            prev = prev + alpha * (value - prev);
+            prevTime = timestamp;
+
+            return prev;
+        };
+    }
+
+    /**
+     * @param {String} datafile
+     * @param {Number} startTime
+     * @returns {String[]}
+     */
+    function buildTrkpts(datafile, startTime) {
+        const datapoints = datafile.split('\n');
+        datapoints.shift(); // header
+        datapoints.pop();   // trailing newline
+        return datapoints.map(dp => {
+            const [offset, type, value] = dp.split(',');
+            const time = new Date(parseInt(startTime) + parseInt(offset));
+            return `<trkpt lat="0" lon="0">
+                    <time>${time.toISOString()}</time>
+                    ${type === 'a' ? `<ele>${parseFloat(value)}</ele>` : ''}
+                    ${type === 'h' ? `<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${parseFloat(value)}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>` : ''}
+                </trkpt>`;
+        });
+    }
+
+    function parseElevation(datafile) {
+        let elevation = [];
+        const datapoints = datafile.split('\n');
+        datapoints.shift(); // header
+        datapoints.pop();   // trailing newline
+        datapoints.map(dp => {
+            const [offset, type, value] = dp.split(',');
+            if(type !== 'a'){
+                return;
+            }
+            elevation.push({ x: parseInt(offset), y: parseFloat(value) });
+        });
+
+        const first = lowPass(5);
+        const second = lowPass(5);
+        const third = lowPass(10);
+
+        const start = elevation[0].x;
+        const end = elevation[elevation.length-1].x;
+
+        const forward = elevation.map(e => ({ x : e.x, y : first(e.x, e.y) }));
+        const backward = elevation.reverse().map(e => ({ x : e.x, y : second(end - e.x, e.y) })).reverse();
+
+        const averaged = [];
+
+        for(let i in forward) {
+            const f = i/forward.length;
+            const b = 1 - f;
+            averaged.push({x: forward[i].x, y: third(forward[i].x, forward[i].y * f + backward[i].y * b)});
+        }
+
+        const maxValue = Math.max(...averaged.map(x => x.y));
+        const minValue = Math.min(...averaged.map(x => x.y));
+
+        const diff = (maxValue - minValue) * 0.01;
+
+        const maxIndex = averaged.findIndex(x => x.y > maxValue - diff);
+        const minIndex = averaged.slice(0, maxIndex).findLastIndex(x => x.y < minValue + diff);
+
+        return {
+            elevation,
+            averaged,
+            minValue,
+            maxValue,
+            minIndex,
+            maxIndex,
+            diff
+        };
+    }
+
+    /**
+     * @param {String} filename
+     * @param {String} metadata
+     * @param {String[]} trkpts
+     * @returns {string}
+     */
+    function buildTrk(filename, metadata, trkpts) {
+        return `
+<trk>
+  <metadata>
+    <time>${new Date(parseInt(metadata.start)).toISOString()}</time>
+    <extensions>
+      <climb:route incline="${metadata.incline}" grade="${metadata.grade}" completed="${metadata.completed ?? true}">
+        ${metadata.type !== 'Normal' ? `<climb:tag>${metadata.type}</climb:tag>` : ''}
+        ${metadata.weighted      ? `<climb:tag>Weighted</climb:tag>`    : ''}
+        ${metadata.autoBelay     ? `<climb:tag>Auto Belay</climb:tag>`  : ''}
+        ${metadata.climbDown     ? `<climb:tag>Climb Down</climb:tag>`  : ''}
+      </climb:route>
+    </extensions>
+  </metadata>
+  <name>${filename.replace('.json', '')}</name>
+  <trkseg>${trkpts.join('')}</trkseg>
+</trk>`;
+    }
+
+    /**
+     * @param {String[]} tracks
+     * @returns {string}
+     */
+    function wrapGpx(tracks) {
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx creator="Bangle.js" version="1.1"
+xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.garmin.com/xmlschemas/GpxExtensions/v3 http://www.garmin.com/xmlschemas/GpxExtensionsv3.xsd http://www.garmin.com/xmlschemas/TrackPointExtension/v1 http://www.garmin.com/xmlschemas/TrackPointExtensionv1.xsd"
+xmlns="http://www.topografix.com/GPX/1/1/"
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1"
+xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3"
+xmlns:climb="https://christhebaron.co.uk/BangleApps/apps/rockclimb/rockclimb.xsd">
+<metadata>
+  <author>
+    <name>Bangle.js</name>
+    <link href="https://banglejs.com/apps/?id=rockclimb" />
+  </author>
+</metadata>
+${tracks.join('\n')}
+</gpx>`;
+    }
+
+    /**
+     * @param {String} filename
+     * @returns {Promise<string|null>}
+     */
+    async function buildTrkFromFile(filename) {
+        const metadata = files[filename];
+        const datafile = await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
+        if(!datafile) return null;
+        const trkpts = buildTrkpts(datafile, metadata.start);
+        return buildTrk(filename, metadata, trkpts);
+    }
+
+    /**
+     * @param {String} session
+     * @param {String[]} sessionfiles
+     * @returns {Promise<void>}
+     */
+    async function downloadSession(session, sessionfiles) {
+        const tracks = [];
+        for(const filename of sessionfiles) {
+            Util.showModal(`Downloading (${tracks.length}/${sessionfiles.length})...`);
+            const trk = await buildTrkFromFile(filename);
+            if(!trk) continue;
+            tracks.push(trk);
+        }
+        Util.saveFile(`rockclimb.${session}.gpx`, "gpx/xml", wrapGpx(tracks));
+    }
+
+    /**
+     * @param {String} filename
+     * @returns {Promise<void>}
+     */
+    async function downloadData(filename) {
+        const trk = await buildTrkFromFile(filename);
+        if(!trk) return;
+        Util.saveFile(filename.replace('.json', '.gpx'), "gpx/xml", wrapGpx([trk]));
+    }
+
+    /**
+     * @param {String} filename
+     * @returns {Promise<void>}
+     */
+    async function deleteData(filename) {
+        await new Promise(resolve => Util.eraseStorage(filename, resolve));
+        await new Promise(resolve => Util.eraseStorageFile(filename.replace('.json', '.csv'), resolve));
+    }
+
+}
