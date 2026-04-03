@@ -84,8 +84,10 @@
                 const maxValue = Math.max(...averaged.map(x => x.y));
                 const minValue = Math.min(...averaged.map(x => x.y));
 
-                const maxIndex = averaged.findIndex(x => x.y > maxValue - (maxValue - minValue) * 0.01);
-                const minIndex = averaged.findLastIndex(x => x.y < minValue + (maxValue - minValue) * 0.01);
+                const diff = (maxValue - minValue) * 0.01;
+
+                const maxIndex = averaged.findIndex(x => x.y > maxValue - diff);
+                const minIndex = averaged.slice(0, maxIndex).findLastIndex(x => x.y < minValue + diff);
 
                 const ctx = document.getElementById(`chart-${filename}`);
                 const data = {
@@ -95,6 +97,22 @@
                             data: averaged,
                             backgroundColor: 'green'
                         },
+                        //{
+                        //    label: 'Start',
+                        //    data: [
+                        //        {x: averaged[minIndex].x, y: minValue},
+                        //        {x: averaged[minIndex].x, y: maxValue}
+                        //    ],
+                        //    type: 'line',
+                        //},
+                        //{
+                        //    label: 'End',
+                        //    data: [
+                        //        {x: averaged[maxIndex].x, y: minValue},
+                        //        {x: averaged[maxIndex].x, y: maxValue}
+                        //    ],
+                        //    type: 'line',
+                        //},
                     ]
                 };
                 const config = {
@@ -110,8 +128,8 @@
                                 max: averaged[maxIndex].x
                             },
                             y: {
-                                min: minValue,
-                                max: maxValue
+                                min: minValue - diff,
+                                max: maxValue + diff
                             }
                         }
                     }
