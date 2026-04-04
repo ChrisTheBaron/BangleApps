@@ -14,9 +14,13 @@
             <xs:element name="tag" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
         </xs:sequence>
 
-        <xs:attribute name="incline"   type="climb:InclineType"   use="required"/>
-        <xs:attribute name="grade"     type="climb:GradeType"     use="required"/>
-        <xs:attribute name="completed" type="xs:boolean"          use="required"/>
+        <xs:attribute name="ascent-start"    type="xs:dateTime"         use="required"/>
+        <xs:attribute name="ascent-finish"   type="xs:dateTime"         use="required"/>
+        <xs:attribute name="descent-start"   type="xs:dateTime"         use="optional"/>
+        <xs:attribute name="descent-finish"  type="xs:dateTime"         use="optional"/>
+        <xs:attribute name="incline"         type="climb:InclineType"   use="required"/>
+        <xs:attribute name="grade"           type="climb:GradeType"     use="required"/>
+        <xs:attribute name="completed"       type="xs:boolean"          use="required"/>
     </xs:complexType>
 
     <!-- Wall incline -->
