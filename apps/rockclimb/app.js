@@ -61,6 +61,8 @@ let fileName;
 
 function startRecording() {
 
+    Bangle.setLocked(true);
+
     Bangle.buzz();
 
     const count = getTodayCount() + 1;
