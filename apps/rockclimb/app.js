@@ -1,3 +1,6 @@
+Bangle.loadWidgets();
+Bangle.drawWidgets();
+
 const storage = require('Storage');
 const metadata = require('./metadata.json');
 
