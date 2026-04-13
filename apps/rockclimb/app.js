@@ -21,6 +21,7 @@ const inclines = [
 const types = [
     'Normal',
     'One Handed',
+    'One Footed',
     'Twister'
 ];
 
