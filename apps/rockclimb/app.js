@@ -2,7 +2,6 @@ Bangle.loadWidgets();
 Bangle.drawWidgets();
 
 const storage = require('Storage');
-const metadata = require('./metadata.json');
 
 const appid = "rockclimb";
 
@@ -28,6 +27,8 @@ const types = [
     'One Footed',
     'Twister'
 ];
+const metadata = storage.readJSON(appid + '.info')
+
 
 let typeIndex = 0;
 let inclineIndex = 0;
