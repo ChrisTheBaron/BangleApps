@@ -1,4 +1,5 @@
 const storage = require('Storage');
+const metadata = require('./metadata.json');
 
 const appid = "rockclimb";
 
@@ -25,8 +26,6 @@ const types = [
     'Twister'
 ];
 
-const sampleRate = 1000;//TODO: Setting
-
 let typeIndex = 0;
 let inclineIndex = 0;
 let gradeIndex = 0;
@@ -34,13 +33,13 @@ let autoBelay = false;
 let climbDown = false;
 let weighted = false;
 
-function getDateStr(d){
-    return d.toISOString().substring(0,10);
+function getDateStr(d) {
+    return d.toISOString().substring(0, 10);
 }
 
 const today = getDateStr(new Date());
 
-function getTodayCount(){
+function getTodayCount() {
     const r = new RegExp("^" + appid + "\." + today + "\..*" + ".json$");
     const t = storage.list(r);
     return t.length;
@@ -48,7 +47,7 @@ function getTodayCount(){
 
 function elapsedString(ms) {
     const s = (ms / 1000) | 0;
-    return `${((s/60)|0).toString().padStart(2, "0")}:${(s%60).toString().padStart(2,"0")}`;
+    return `${((s / 60) | 0).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 }
 
 let hrListener;
@@ -59,29 +58,29 @@ let fileName;
 function startRecording() {
 
     Bangle.buzz();
-    
-    const count = getTodayCount()+1;
+
+    const count = getTodayCount() + 1;
     startTime = Date.now();
-    fileName = appid+"."+getDateStr(new Date(startTime))+"."+count;
-    const dataFile = storage.open(fileName+".csv", 'a');
+    fileName = appid + "." + getDateStr(new Date(startTime)) + "." + count;
+    const dataFile = storage.open(fileName + ".csv", 'a');
     dataFile.write("time,type,value\n");
 
     Bangle.setHRMPower(true, appid);
     hrListener = hr => {
-        if(hr.bpm > 0) dataFile.write(""+(Date.now() - startTime).toFixed(0)+",h,"+hr.bpm+"\n");
+        if (hr.bpm > 0) dataFile.write("" + (Date.now() - startTime).toFixed(0) + ",h," + hr.bpm + "\n");
     };
     Bangle.on('HRM', hrListener);
 
     Bangle.setBarometerPower(true, appid);
     altListener = alt => {
-        dataFile.write(""+(Date.now() - startTime).toFixed(0)+",a,"+alt.altitude.toFixed(2)+"\n");
+        dataFile.write("" + (Date.now() - startTime).toFixed(0) + ",a," + alt.altitude.toFixed(2) + "\n");
     };
     Bangle.on('pressure', altListener);
 
     E.showMenu({
-        "": { title:"Recording (" + count + ")"},
+        "": {title: "Recording (" + count + ")"},
         "Topped": () => stopRecording("topped"),
-        "Another": ()=> stopRecording("another"),
+        "Another": () => stopRecording("another"),
         "Nearly": () => stopRecording("nearly"),
         "Cancel": () => stopRecording("cancel"),
     });
@@ -92,14 +91,15 @@ function stopRecording(state) {
 
     Bangle.buzz();
 
-    if(hrListener) Bangle.removeListener('HRM', hrListener);
+    if (hrListener) Bangle.removeListener('HRM', hrListener);
     Bangle.setHRMPower(false, appid);
 
-    if(altListener) Bangle.removeListener('pressure', altListener);
+    if (altListener) Bangle.removeListener('pressure', altListener);
     Bangle.setBarometerPower(false, appid);
 
-    if(state !== "cancel"){
+    if (state !== "cancel") {
         storage.writeJSON(fileName + ".json", {
+            version: metadata.version,
             start: startTime.toFixed(0),
             end: Date.now().toFixed(0),
             completed: (state === "topped" || state === "another"),
@@ -111,11 +111,11 @@ function stopRecording(state) {
             climbDown
         });
     } else {
-        const dataFile = storage.open(fileName+".csv", 'r');
+        const dataFile = storage.open(fileName + ".csv", 'r');
         dataFile.erase();
     }
 
-    if(state === "another"){
+    if (state === "another") {
         startRecording();
     } else {
         showMainMenu();
@@ -125,7 +125,7 @@ function stopRecording(state) {
 
 function showMainMenu() {
     E.showMenu({
-        "": { title: "Climb ("+getTodayCount()+" Today)" },
+        "": {title: "Climb (" + getTodayCount() + " Today)"},
         "Record": () => startRecording(),
         "Grade": {
             value: gradeIndex,
