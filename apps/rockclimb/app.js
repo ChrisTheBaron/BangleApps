@@ -5,30 +5,13 @@ const storage = require('Storage');
 
 const appid = "rockclimb";
 
-const grades = [
-    '4', '4+',
-    '5', '5+',
-    '6a', '6a+',
-    '6b', '6b+',
-    '6c', '6c+',
-    '7a', '7a+',
-    '7b', '7b+'
-];
-
-const inclines = [
-    'Slab',
-    'Vertical',
-    'Overhang'
-];
-
-const types = [
-    'Normal',
-    'One Handed',
-    'One Footed',
-    'Twister'
-];
 const metadata = storage.readJSON(appid + '.info')
 
+const grades = ['4', '4+', '5', '5+', '6a', '6a+', '6b', '6b+', '6c', '6c+', '7a', '7a+', '7b', '7b+'];
+
+const inclines = ['Slab', 'Vertical', 'Overhang'];
+
+const types = ['Normal', 'One Handed', 'One Footed', 'Twister'];
 
 let typeIndex = 0;
 let inclineIndex = 0;
@@ -43,10 +26,26 @@ function getDateStr(d) {
 
 const today = getDateStr(new Date());
 
-function getTodayCount() {
-    const r = new RegExp("^" + appid + "\." + today + "\..*" + ".json$");
-    const t = storage.list(r);
-    return t.length;
+/**
+ * @returns {{count: number, next: number}}
+ */
+function getTodaysFiles() {
+    const r = new RegExp("^" + appid + "\\." + today + "\\.(\\d+)\\.json$");
+    const files = storage.list(r);
+
+    let max = 0;
+
+    for (const file of files) {
+        const match = file.match(r);
+        if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > max) {
+                max = num;
+            }
+        }
+    }
+
+    return {count: files.length, next: max + 1};
 }
 
 function elapsedString(ms) {
@@ -65,9 +64,9 @@ function startRecording() {
 
     Bangle.buzz();
 
-    const count = getTodayCount() + 1;
+    const files = getTodaysFiles();
     startTime = Date.now();
-    fileName = appid + "." + getDateStr(new Date(startTime)) + "." + count;
+    fileName = appid + "." + getDateStr(new Date(startTime)) + "." + files.next;
     const dataFile = storage.open(fileName + ".csv", 'a');
     dataFile.write("time,type,value\n");
 
@@ -84,7 +83,7 @@ function startRecording() {
     Bangle.on('pressure', altListener);
 
     E.showMenu({
-        "": {title: "Recording (" + count + ")"},
+        "": {title: "Recording (" + (files.count + 1) + ")"},
         "Topped": () => stopRecording("topped"),
         "Another": () => stopRecording("another"),
         "Nearly": () => stopRecording("nearly"),
@@ -131,9 +130,7 @@ function stopRecording(state) {
 
 function showMainMenu() {
     E.showMenu({
-        "": {title: "Climb (" + getTodayCount() + " Today)"},
-        "Record": () => startRecording(),
-        "Grade": {
+        "": {title: "Climb (" + getTodaysFiles().count + " Today)"}, "Record": () => startRecording(), "Grade": {
             value: gradeIndex,
             min: 0,
             max: grades.length - 1,
@@ -141,8 +138,7 @@ function showMainMenu() {
             wrap: true,
             format: v => grades[v],
             onchange: v => gradeIndex = v
-        },
-        "Incline": {
+        }, "Incline": {
             value: inclineIndex,
             min: 0,
             max: inclines.length - 1,
@@ -150,8 +146,7 @@ function showMainMenu() {
             wrap: true,
             format: v => inclines[v],
             onchange: v => inclineIndex = v
-        },
-        "Type": {
+        }, "Type": {
             value: typeIndex,
             min: 0,
             max: types.length - 1,
@@ -159,18 +154,12 @@ function showMainMenu() {
             wrap: true,
             format: v => types[v],
             onchange: v => typeIndex = v
-        },
-        "Auto Belay": {
-            value: autoBelay,
-            onchange: v => autoBelay = v
-        },
-        "Climb Down": {
-            value: climbDown,
-            onchange: v => climbDown = v
-        },
-        "Weighted": {
-            value: weighted,
-            onchange: v => weighted = v
+        }, "Auto Belay": {
+            value: autoBelay, onchange: v => autoBelay = v
+        }, "Climb Down": {
+            value: climbDown, onchange: v => climbDown = v
+        }, "Weighted": {
+            value: weighted, onchange: v => weighted = v
         },
     });
 }
