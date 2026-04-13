@@ -10,6 +10,7 @@
   "supports": [
     "BANGLEJS2"
   ],
+  "allow_emulator": true,
   "readme": "README.md",
   "interface": "interface.html",
   "storage": [
