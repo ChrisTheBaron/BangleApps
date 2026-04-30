@@ -57,95 +57,101 @@ async function onInit() {
             const filename = detail.getAttribute('filename');
             const metadata = files[filename];
 
-            if (!csvs[filename]) {
-                console.log(filename);
-                csvs[filename] = await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
-            }
-            const {
-                averaged,
-                ascentStartIndex,
-                ascentFinishIndex,
-                descentStartIndex,
-                descentFinishIndex,
-                diff
-            } = parseElevation(csvs[filename]);
+            try {
 
-            const ctx = document.getElementById(`chart-${filename}`);
-            const data = {
-                datasets: [
-                    {
-                        label: 'Elevation',
-                        data: averaged,
-                        backgroundColor: 'green'
-                    },
-                    //{
-                    //    label: 'Ascent Start',
-                    //    data: [
-                    //        {x: averaged[ascentStartIndex].x, y: averaged[ascentStartIndex].y},
-                    //        {x: averaged[ascentStartIndex].x, y: averaged[ascentFinishIndex].y}
-                    //    ],
-                    //    type: 'line',
-                    //},
-                    //{
-                    //    label: 'Ascent End',
-                    //    data: [
-                    //        {x: averaged[ascentFinishIndex].x, y: averaged[ascentStartIndex].y},
-                    //        {x: averaged[ascentFinishIndex].x, y: averaged[ascentFinishIndex].y}
-                    //    ],
-                    //    type: 'line',
-                    //},
-                    //{
-                    //    label: 'Descent Start',
-                    //    data: [
-                    //        {x: averaged[descentStartIndex].x, y: averaged[descentStartIndex].y},
-                    //        {x: averaged[descentStartIndex].x, y: averaged[descentFinishIndex].y}
-                    //    ],
-                    //    type: 'line',
-                    //},
-                    //{
-                    //    label: 'Descent End',
-                    //    data: [
-                    //        {x: averaged[descentFinishIndex].x, y: averaged[descentStartIndex].y},
-                    //        {x: averaged[descentFinishIndex].x, y: averaged[descentFinishIndex].y}
-                    //    ],
-                    //    type: 'line',
-                    //},
-                ]
-            };
-            const config = {
-                type: 'line',
-                data: data,
-                options: {
-                    animation: false,
-                    scales: {
-                        x: {
-                            type: 'linear',
-                            position: 'bottom',
-                            min: averaged[ascentStartIndex].x,
-                            max: metadata.climbDown ? averaged[descentFinishIndex].x : averaged[ascentFinishIndex].x,
-                            ticks: {
-                                callback: (value) => elapsedString(value - averaged[ascentStartIndex].x)
-                            }
+                if (!csvs[filename]) {
+                    console.log(filename);
+                    csvs[filename] = await new Promise(resolve => Util.readStorageFile(filename.replace('.json', '.csv'), resolve));
+                }
+                const {
+                    error,
+                    averaged,
+                    ascentStartIndex,
+                    ascentFinishIndex,
+                    descentStartIndex,
+                    descentFinishIndex,
+                    diff
+                } = parseElevation(csvs[filename]);
+
+                const ctx = document.getElementById(`chart-${filename}`);
+                const data = {
+                    datasets: [
+                        {
+                            label: 'Elevation',
+                            data: averaged,
+                            backgroundColor: 'green'
                         },
-                        y: {
-                            min: (metadata.climbDown ? Math.min(averaged[ascentStartIndex].y, averaged[descentFinishIndex].y) : averaged[ascentStartIndex].y) - diff * 10,
-                            max: (metadata.climbDown ? Math.max(averaged[ascentFinishIndex].y, averaged[descentStartIndex].y) : averaged[ascentFinishIndex].y) + diff * 10,
-                            display: false
+                        //{
+                        //    label: 'Ascent Start',
+                        //    data: [
+                        //        {x: averaged[ascentStartIndex].x, y: averaged[ascentStartIndex].y},
+                        //        {x: averaged[ascentStartIndex].x, y: averaged[ascentFinishIndex].y}
+                        //    ],
+                        //    type: 'line',
+                        //},
+                        //{
+                        //    label: 'Ascent End',
+                        //    data: [
+                        //        {x: averaged[ascentFinishIndex].x, y: averaged[ascentStartIndex].y},
+                        //        {x: averaged[ascentFinishIndex].x, y: averaged[ascentFinishIndex].y}
+                        //    ],
+                        //    type: 'line',
+                        //},
+                        //{
+                        //    label: 'Descent Start',
+                        //    data: [
+                        //        {x: averaged[descentStartIndex].x, y: averaged[descentStartIndex].y},
+                        //        {x: averaged[descentStartIndex].x, y: averaged[descentFinishIndex].y}
+                        //    ],
+                        //    type: 'line',
+                        //},
+                        //{
+                        //    label: 'Descent End',
+                        //    data: [
+                        //        {x: averaged[descentFinishIndex].x, y: averaged[descentStartIndex].y},
+                        //        {x: averaged[descentFinishIndex].x, y: averaged[descentFinishIndex].y}
+                        //    ],
+                        //    type: 'line',
+                        //},
+                    ]
+                };
+                const config = {
+                    type: 'line',
+                    data: data,
+                    options: {
+                        animation: false,
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                position: 'bottom',
+                                min: error ? null : averaged[ascentStartIndex].x,
+                                max: error ? null : metadata.climbDown ? averaged[descentFinishIndex].x : averaged[ascentFinishIndex].x,
+                                ticks: {
+                                    callback: (value) => elapsedString(value - averaged[ascentStartIndex].x)
+                                }
+                            },
+                            y: {
+                                min: error ? null : (metadata.climbDown ? Math.min(averaged[ascentStartIndex].y, averaged[descentFinishIndex].y) : averaged[ascentStartIndex].y) - diff * 10,
+                                max: error ? null : (metadata.climbDown ? Math.max(averaged[ascentFinishIndex].y, averaged[descentStartIndex].y) : averaged[ascentFinishIndex].y) + diff * 10,
+                                display: false
+                            }
                         }
                     }
-                }
-            };
-            new Chart(ctx, config);
-            Util.hideModal();
+                };
+                new Chart(ctx, config);
+                Util.hideModal();
+
+            } catch (err) {
+                alert(`Failed to generate graph for file '${filename}' - ${err.message}`);
+            }
+
         }, {once: true});
     });
 
     document.querySelectorAll(`a[action="downloadSession"]`).forEach(button => {
         button.addEventListener("click", async e => {
             const session = e.currentTarget.getAttribute("session");
-            Util.showModal("Downloading...");
             await downloadSession(session, sessions[session]);
-            Util.hideModal();
         });
     });
 
@@ -166,7 +172,6 @@ async function onInit() {
 
     document.querySelectorAll(`a[action="download"][filename]`).forEach(button => {
         button.addEventListener("click", async e => {
-            Util.showModal("Downloading...");
             const filename = e.currentTarget.getAttribute("filename");
             await downloadData(filename);
             Util.hideModal();
@@ -282,23 +287,47 @@ async function onInit() {
             averaged.push({x: forward[i].x, y: third(forward[i].x, forward[i].y * f + backward[i].y * b)});
         }
 
-        const peakElevation = Math.max(...averaged.map(x => x.y));
-        const lowestElevation = Math.min(...averaged.map(x => x.y));
+        let lowestElevation = Math.min(...averaged.map(x => x.y));
+        let peakElevation = Math.max(...averaged.map(x => x.y));
 
-        const diff = (peakElevation - lowestElevation) * 0.01;
+        let diff = (peakElevation - lowestElevation) * 0.01;
 
-        const ascentFinishIndex = averaged.findIndex(x => x.y > peakElevation - diff);
+        //First round we get estimates
+        let ascentStartIndex = averaged.findIndex(x => x.y <= lowestElevation + diff);
+        let ascentFinishIndex = averaged.findLastIndex(x => x.y >= peakElevation - diff);
 
-        const ascentStartElevation = Math.min(...averaged.slice(0, ascentFinishIndex).map(x => x.y));
-        const ascentStartIndex = averaged.slice(0, ascentFinishIndex).findLastIndex(x => x.y < ascentStartElevation + diff);
+        peakElevation = Math.max(...averaged.slice(ascentStartIndex).map(x => x.y));
+        diff = (peakElevation - lowestElevation) * 0.01;
+
+        console.log({ascentStartIndex, ascentFinishIndex});
+
+        //Defaults if not found
+        if (ascentStartIndex < 0) ascentStartIndex = 0;
+        if (ascentFinishIndex < 0) ascentFinishIndex = averaged.length - 1;
+
+        //Second round we can use estimates as bounds
+        ascentStartIndex = averaged.slice(ascentStartIndex).findLastIndex(x => x.y <= lowestElevation + diff) + ascentStartIndex;
+        ascentFinishIndex = averaged.slice(ascentStartIndex).findIndex(x => x.y >= peakElevation - diff) + ascentStartIndex;
+
+        console.log({ascentStartIndex, ascentFinishIndex});
+
+        //Default again
+        if (ascentStartIndex < 0) ascentStartIndex = 0;
+        if (ascentFinishIndex < 0) ascentFinishIndex = averaged.length - 1;
 
         const secondHalf = averaged.slice(ascentFinishIndex);
         const descentFinishElevation = Math.min(...secondHalf.map(x => x.y));
 
-        const descentStartIndex = secondHalf.findLastIndex(x => x.y > peakElevation - diff) + ascentFinishIndex;
-        const descentFinishIndex = secondHalf.findIndex(x => x.y < descentFinishElevation + diff) + ascentFinishIndex;
+        //Default to end of ascent if not found
+        let descentStartIndex = secondHalf.findLastIndex(x => x.y > peakElevation - diff) + ascentFinishIndex;
+        if (descentStartIndex < ascentFinishIndex) descentStartIndex = ascentFinishIndex;
+
+        //Default to end if not found
+        let descentFinishIndex = secondHalf.findIndex(x => x.y < descentFinishElevation + diff) + ascentFinishIndex;
+        if (descentFinishIndex < ascentFinishIndex) descentFinishIndex = averaged.length - 1;
 
         return {
+            error: ascentStartIndex === ascentFinishIndex,
             raw,
             averaged,
             ascentStartIndex,
@@ -400,13 +429,22 @@ ${tracks.join('\n')}
     async function downloadSession(session, sessionfiles) {
         const tracks = [];
         let trackNo = 1;
-        for (const filename of sessionfiles) {
-            Util.showModal(`Downloading (${trackNo}/${sessionfiles.length})...`);
-            const trk = await buildTrkFromFile(filename, trackNo++);
-            if (!trk) continue;
-            tracks.push(trk);
+        try {
+            Util.showModal("Downloading...");
+            for (const filename of sessionfiles) {
+                try {
+                    Util.showModal(`Downloading (${trackNo}/${sessionfiles.length})...`);
+                    const trk = await buildTrkFromFile(filename, trackNo++);
+                    tracks.push(trk);
+                } catch (err) {
+                    throw new Error(`Failed to generate track for file '${filename}' - ${err.message}`);
+                }
+            }
+            Util.saveFile(`rockclimb.${session}.gpx`, "gpx/xml", wrapGpx(tracks));
+            Util.hideModal();
+        } catch (err) {
+            Util.showModal(`Error downloading session '${session}' - ${err.message}`, "Error");
         }
-        Util.saveFile(`rockclimb.${session}.gpx`, "gpx/xml", wrapGpx(tracks));
     }
 
     /**
@@ -414,9 +452,14 @@ ${tracks.join('\n')}
      * @returns {Promise<void>}
      */
     async function downloadData(filename) {
-        const trk = await buildTrkFromFile(filename, 1);
-        if (!trk) return;
-        Util.saveFile(filename.replace('.json', '.gpx'), "gpx/xml", wrapGpx([trk]));
+        try {
+            Util.showModal("Downloading...");
+            const trk = await buildTrkFromFile(filename, 1);
+            Util.saveFile(filename.replace('.json', '.gpx'), "gpx/xml", wrapGpx([trk]));
+            Util.hideModal();
+        } catch (err) {
+            Util.showModal(`Error downloading file '${filename}' - ${err.message}`, "Error");
+        }
     }
 
     /**
